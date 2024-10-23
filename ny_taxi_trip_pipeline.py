@@ -3,8 +3,6 @@ from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.trigger_rule import TriggerRule
 from pendulum import datetime
 
-TRIP_DATA_ROOT = "https://d37ci6vzurychx.cloudfront.net/trip-data"
-
 
 @dag(schedule=None,
      start_date=datetime(2024, 1, 1, tz="UTC"),
@@ -32,13 +30,15 @@ def ny_yellow_taxi_trip_fetch():
         from airflow.io.path import ObjectStoragePath
         from airflow.models import Variable
 
+        trip_data_root = "https://d37ci6vzurychx.cloudfront.net/trip-data"
+
         # This variable should contain the S3 path to store NYC taxi trip downloads; it should include the connection ID like:
         # "s3://<connection_id>@example-bucket/<path>/"
         bucket_root = ObjectStoragePath(Variable.get("s3_ny_taxi_trip_root"))
         new_data_available = False
         for i in range(6):
             date_to_check = pendulum.now("UTC").start_of("month").subtract(months=i)
-            endpoint = f"{TRIP_DATA_ROOT}/yellow_tripdata_{date_to_check.year}-{date_to_check.month:02}.parquet"
+            endpoint = f"{trip_data_root}/yellow_tripdata_{date_to_check.year}-{date_to_check.month:02}.parquet"
 
             path = bucket_root / f"{date_to_check.year}/{date_to_check.month:02}/yellow.parquet"
             if path.is_file():
