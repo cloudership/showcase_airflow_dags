@@ -1,5 +1,3 @@
-import logging
-
 import pendulum
 from airflow.decorators import dag, task
 from airflow.io.path import ObjectStoragePath
@@ -37,8 +35,17 @@ def fetch_fixturedownload_football_uk_premier_league():
                 file.write(response.content)
         return path
 
-    @task
+    @task.virtualenv(system_site_packages=True,
+                     use_dill=True,
+                     requirements=[
+                         "aiobotocore",
+                         "apache-airflow[amazon]",
+                         "apache-airflow-providers-amazon[s3fs]",
+                         "requests",
+                     ])
     def transform(path: ObjectStoragePath):
+        import logging
+
         logging.info(path.read_text(encoding="utf-8"))
 
     transform(fetch())
