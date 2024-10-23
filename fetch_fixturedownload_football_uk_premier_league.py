@@ -13,7 +13,7 @@ from airflow.models import Variable
      description="Download UK Premier League football fixtures data",
      catchup=False)
 def fetch_fixturedownload_football_uk_premier_league():
-    @task.virtualenv(system_site_packages=False,
+    @task.virtualenv(system_site_packages=True,
                      use_dill=True,
                      requirements=[
                          "aiobotocore",
