@@ -1,4 +1,5 @@
 from airflow.decorators import dag, task
+from airflow.operators.empty import EmptyOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.trigger_rule import TriggerRule
 from pendulum import datetime
@@ -10,14 +11,14 @@ from pendulum import datetime
                   "If new data is available, trigger the training DAG"),
      catchup=False)
 def ny_yellow_taxi_trip_fetch():
-    @task.virtualenv(system_site_packages=True,
-                     use_dill=True,
-                     requirements=[
-                         "aiobotocore",
-                         "apache-airflow[amazon]",
-                         "apache-airflow-providers-amazon[s3fs]",
-                         "requests",
-                     ])
+    @task.branch_virtualenv(system_site_packages=True,
+                            use_dill=True,
+                            requirements=[
+                                "aiobotocore",
+                                "apache-airflow[amazon]",
+                                "apache-airflow-providers-amazon[s3fs]",
+                                "requests",
+                            ])
     def fetch():
         import io
         import logging
@@ -26,7 +27,6 @@ def ny_yellow_taxi_trip_fetch():
         import pendulum
         import requests
 
-        from airflow.exceptions import AirflowSkipException
         from airflow.io.path import ObjectStoragePath
         from airflow.models import Variable
 
@@ -60,7 +60,11 @@ def ny_yellow_taxi_trip_fetch():
                         logging.info(f"{path} saved")
 
         if not new_data_available:
-            raise AirflowSkipException("No new data available - not triggering retraining task")
+            logging.info("No new data available - not triggering retraining task")
+            return "skip_retrain"
+        else:
+            logging.info("New data is available! Triggering retraining task")
+            return "trigger_retrain"
 
     trigger_retrain = TriggerDagRunOperator(
         task_id="trigger_retrain",
@@ -68,7 +72,9 @@ def ny_yellow_taxi_trip_fetch():
         trigger_dag_id="ny_yellow_taxi_trip_train",
     )
 
-    fetch() >> trigger_retrain
+    skip_retrain = EmptyOperator(task_id="skip_retrain")
+
+    fetch() >> [skip_retrain, trigger_retrain]
 
 
 ny_yellow_taxi_trip_fetch()
