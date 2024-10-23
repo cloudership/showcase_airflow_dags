@@ -14,6 +14,7 @@ from airflow.models import Variable
      catchup=False)
 def fetch_fixturedownload_football_uk_premier_league():
     @task.virtualenv(system_site_packages=False,
+                     use_dill=True,
                      requirements=[
                          "aiobotocore",
                          "apache-airflow[amazon]",
