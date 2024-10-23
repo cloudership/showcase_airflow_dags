@@ -1,13 +1,4 @@
-import io
-import logging
-
-import pandas
-import pendulum
-import requests
 from airflow.decorators import dag, task
-from airflow.exceptions import AirflowSkipException
-from airflow.io.path import ObjectStoragePath
-from airflow.models import Variable
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.utils.trigger_rule import TriggerRule
 from pendulum import datetime
@@ -21,8 +12,26 @@ TRIP_DATA_ROOT = "https://d37ci6vzurychx.cloudfront.net/trip-data"
                   "If new data is available, trigger the training DAG"),
      catchup=False)
 def ny_yellow_taxi_trip_fetch():
-    @task
+    @task.virtualenv(system_site_packages=True,
+                     use_dill=True,
+                     requirements=[
+                         "aiobotocore",
+                         "apache-airflow[amazon]",
+                         "apache-airflow-providers-amazon[s3fs]",
+                         "requests",
+                     ])
     def fetch():
+        import io
+        import logging
+
+        import pandas
+        import pendulum
+        import requests
+
+        from airflow.exceptions import AirflowSkipException
+        from airflow.io.path import ObjectStoragePath
+        from airflow.models import Variable
+
         # This variable should contain the S3 path to store NYC taxi trip downloads; it should include the connection ID like:
         # "s3://<connection_id>@example-bucket/<path>/"
         bucket_root = ObjectStoragePath(Variable.get("s3_ny_taxi_trip_root"))
@@ -74,6 +83,8 @@ ny_yellow_taxi_trip_fetch()
 def ny_yellow_taxi_trip_train():
     @task
     def train():
+        import logging
+
         logging.info("Training model - TODO")
 
     train()
