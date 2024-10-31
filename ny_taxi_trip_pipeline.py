@@ -36,11 +36,12 @@ def ny_yellow_taxi_trip_fetch():
         # "s3://<connection_id>@example-bucket/<path>/"
         bucket_root = ObjectStoragePath(Variable.get("s3_ny_taxi_trip_root"))
         new_data_available = False
+        now = pendulum.now("UTC")
         for i in range(6):
-            date_to_check = pendulum.now("UTC").start_of("month").subtract(months=i)
+            date_to_check = now.start_of("month").subtract(months=i)
             endpoint = f"{trip_data_root}/yellow_tripdata_{date_to_check.year}-{date_to_check.month:02}.parquet"
 
-            path = bucket_root / f"{date_to_check.year}/{date_to_check.month:02}/yellow.parquet"
+            path = bucket_root / f"raw/{date_to_check.year}/{date_to_check.month:02}/yellow.parquet"
             if path.is_file():
                 logging.info(f"{path} exists")
             else:
