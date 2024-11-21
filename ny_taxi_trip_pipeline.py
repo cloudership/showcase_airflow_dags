@@ -83,16 +83,107 @@ ny_yellow_taxi_trip_fetch()
 
 @dag(schedule=None,
      start_date=datetime(2024, 1, 1, tz="UTC"),
+     catchup=False)
+def ny_yellow_taxi_trip_prepare():
+    @task.branch_virtualenv(system_site_packages=True,
+                            use_dill=True,
+                            requirements=[
+                                "aiobotocore",
+                                "apache-airflow[amazon]",
+                                "apache-airflow-providers-amazon[s3fs]",
+                                "requests",
+                            ])
+    def prepare():
+        """
+        Take all available data from the last 6 months and create training and validation datasets.
+        Store by timestamp so they can be sorted.
+        """
+        import logging
+
+        import pandas as pd
+        import pendulum
+
+        from airflow.io.path import ObjectStoragePath
+        from airflow.models import Variable
+
+        # This variable should contain the S3 path to store NYC taxi trip downloads; it should include the connection ID like:
+        # "s3://<connection_id>@example-bucket/<path>/"
+        bucket_root = ObjectStoragePath(Variable.get("s3_ny_taxi_trip_root"))
+        now = pendulum.now("UTC")
+        df_train_list = []
+        df_val = None
+        for i in range(6):
+            date_to_check = now.start_of("month").subtract(months=i)
+            path = bucket_root / f"raw/{date_to_check.year}/{date_to_check.month:02}/yellow.parquet"
+            if path.is_file():
+                with path.open("rb") as file:
+                    if df_val is None:
+                        logging.info(f"Validation set: {path}")
+                        df_val = pd.read_parquet(file)
+                    else:
+                        logging.info(f"Training subset: {path}")
+                        df_train_list.append(pd.read_parquet(file))
+
+        if not df_train_list:
+            raise "Train/Test data not set"
+
+        if df_val.empty:
+            raise "Validation data not set"
+
+        df_train = pd.concat(df_train_list)
+
+        training_root = bucket_root.joinpath(f"training/{now.isoformat()}")
+
+        train_path = training_root / "train.parquet"
+        val_path = training_root / "val.parquet"
+        with train_path.open("wb") as file:
+            logging.info(f"Writing training dataset to {train_path}")
+            df_train.to_parquet(file)
+        with val_path.open("wb") as file:
+            logging.info(f"Writing validation dataset to {val_path}")
+            df_val.to_parquet(file)
+        with (bucket_root / "current").open("w") as file:
+            logging.info(f"Storing current training path as {training_root.name}")
+            file.write(str(training_root.name))
+
+    prepare()
+
+
+ny_yellow_taxi_trip_prepare()
+
+
+@dag(schedule=None,
+     start_date=datetime(2024, 1, 1, tz="UTC"),
      description=("Using all the available data in the last 6 months, train the taxi trip times prediction model. "
                   "If its loss is less than the previous version of the model, deploy it (TODO). "
                   "If loss is greater, trigger an alert so the model can be checked (TODO)"),
      catchup=False)
 def ny_yellow_taxi_trip_train():
-    @task
+    @task.branch_virtualenv(system_site_packages=True,
+                            use_dill=True,
+                            requirements=[
+                                "aiobotocore",
+                                "apache-airflow[amazon]",
+                                "apache-airflow-providers-amazon[s3fs]",
+                                "requests",
+                            ])
     def train():
         import logging
+        import pendulum
 
-        logging.info("Training model - TODO")
+        from airflow.io.path import ObjectStoragePath
+        from airflow.models import Variable
+
+        now = pendulum.now("UTC")
+
+        # This variable should contain the S3 path to store NYC taxi trip downloads; it should include the connection ID like:
+        # "s3://<connection_id>@example-bucket/<path>/"
+        bucket_root = ObjectStoragePath(Variable.get("s3_ny_taxi_trip_root"))
+
+        with (bucket_root / "current").open("r") as file:
+            training_root = bucket_root / "training" / file.read()
+
+        [logging.info(f) for f in training_root.iterdir() if f.is_file()]
 
     train()
 
