@@ -61,16 +61,16 @@ def ny_yellow_taxi_trip_fetch():
                         logging.info(f"{path} saved")
 
         if not new_data_available:
-            logging.info("No new data available - not triggering retraining task")
+            logging.info("No new data available - not triggering rest of training pipeline")
             return "skip_retrain"
         else:
-            logging.info("New data is available! Triggering retraining task")
+            logging.info("New data is available! Triggering rest of training pipeline")
             return "trigger_retrain"
 
     trigger_retrain = TriggerDagRunOperator(
         task_id="trigger_retrain",
         trigger_rule=TriggerRule.ALL_SUCCESS,
-        trigger_dag_id="ny_yellow_taxi_trip_train",
+        trigger_dag_id="ny_yellow_taxi_trip_prepare",
     )
 
     skip_retrain = EmptyOperator(task_id="skip_retrain")
@@ -170,6 +170,7 @@ def ny_yellow_taxi_trip_train():
     def train():
         import logging
         import pendulum
+        import pandas as pd
 
         from airflow.io.path import ObjectStoragePath
         from airflow.models import Variable
@@ -184,6 +185,11 @@ def ny_yellow_taxi_trip_train():
             training_root = bucket_root / "training" / file.read()
 
         [logging.info(f) for f in training_root.iterdir() if f.is_file()]
+
+        with (training_root / "train.parquet").open("rb") as file:
+            df_train = pd.read_parquet(file)
+        with (training_root / "val.parquet").open("rb") as file:
+            df_val = pd.read_parquet(file)
 
     train()
 
