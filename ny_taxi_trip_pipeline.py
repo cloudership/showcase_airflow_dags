@@ -130,7 +130,7 @@ def ny_yellow_taxi_trip_prepare():
         if df_test.empty:
             raise "Test data not set"
 
-        df_train = pd.concat(df_train_list)
+        df_train = pd.concat(df_train_list, ignore_index=True)
 
         training_root = bucket_root.joinpath(f"training/{now.isoformat()}")
 
