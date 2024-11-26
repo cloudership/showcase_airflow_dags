@@ -146,13 +146,7 @@ def ny_yellow_taxi_trip_prepare():
             logging.info(f"Storing current training path as {training_root.name}")
             file.write(str(training_root.name))
 
-    trigger_train = TriggerDagRunOperator(
-        task_id="trigger_train",
-        trigger_rule=TriggerRule.ALL_SUCCESS,
-        trigger_dag_id="ny_yellow_taxi_trip_train",
-    )
-
-    prepare() >> trigger_train
+    prepare()
 
 
 ny_yellow_taxi_trip_prepare()
